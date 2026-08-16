@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Arquitectura de observabilidad — Pipeline OpenTelemetry end-to-end</title>
+<style>
+  :root{
+    --trazas:#2a78d6; --metricas:#1baf7a; --logs:#eda100;
+    --ink:#0b0b0b; --ink2:#52514e; --ink3:#7a7873;
+    --surface:#fcfcfb; --card:#ffffff; --line:#d8d7d2; --band:#f2f4f7;
+    --dark:#16213e;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:28px 32px 34px; background:var(--surface); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    width:1180px;
+  }
+  h1{font-size:23px; margin:0 0 4px; letter-spacing:-.2px}
+  .sub{font-size:13px; color:var(--ink2); margin:0 0 20px}
+
+  /* ---- leyenda de señales ---- */
+  .leyenda{display:flex; gap:26px; align-items:center; margin:0 0 18px; padding:11px 16px;
+           background:var(--card); border:1px solid var(--line); border-radius:9px}
+  .leyenda b{font-size:11.5px; color:var(--ink2); font-weight:600; letter-spacing:.4px; text-transform:uppercase}
+  .sig{display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600}
+  .dot{width:13px; height:13px; border-radius:3px; box-shadow:0 0 0 2px var(--card)}
+  .sig small{font-weight:400; color:var(--ink2)}
+
+  /* ---- capas ---- */
+  .capa{background:var(--card); border:1px solid var(--line); border-radius:11px;
+        margin-bottom:0; padding:15px 18px 17px; position:relative}
+  .capa-head{display:flex; align-items:baseline; gap:11px; margin-bottom:12px}
+  .num{background:var(--dark); color:#fff; font-size:11px; font-weight:700; letter-spacing:.5px;
+       padding:3px 9px; border-radius:20px; white-space:nowrap}
+  .capa-head h2{font-size:15px; margin:0; letter-spacing:-.1px}
+  .capa-head span{font-size:12px; color:var(--ink3)}
+
+  .flecha{text-align:center; color:var(--ink3); font-size:11.5px; padding:7px 0; line-height:1.35}
+  .flecha b{color:var(--ink2)}
+  .flecha::before{content:"▼"; display:block; font-size:10px; color:var(--line); margin-bottom:2px}
+
+  /* ---- servicios ---- */
+  .fila{display:flex; gap:14px; align-items:stretch}
+  .svc{flex:1; border:1px solid var(--line); border-radius:9px; padding:12px 14px; background:#fbfcfd}
+  .svc h3{margin:0 0 3px; font-size:13.5px}
+  .svc .rol{font-size:11.5px; color:var(--ink3); margin:0 0 9px}
+  .svc ul{margin:0; padding-left:15px; font-size:11.5px; color:var(--ink2); line-height:1.65}
+  .svc code{background:#eef1f5; padding:1px 4px; border-radius:3px; font-size:10.8px}
+  .tag{display:inline-block; font-size:10px; font-weight:700; padding:1.5px 6px; border-radius:3px;
+       color:#fff; margin-right:4px; letter-spacing:.3px}
+
+  .conector{display:flex; flex-direction:column; justify-content:center; align-items:center;
+            min-width:150px; text-align:center}
+  .conector .l{border-top:2px dashed var(--trazas); width:100%; margin-bottom:6px}
+  .conector small{font-size:10.5px; color:var(--ink2); line-height:1.4}
+  .conector code{font-size:10px; background:#e8f0fb; color:#1c5cab; padding:1px 5px; border-radius:3px; font-weight:600}
+
+  /* ---- collector ---- */
+  .pipeline{display:flex; align-items:center; gap:0; flex-wrap:nowrap; margin-top:2px}
+  .paso{border:1px solid var(--line); background:#fbfcfd; border-radius:7px; padding:8px 11px; text-align:center; flex:1}
+  .paso b{font-size:11.5px; display:block; margin-bottom:2px}
+  .paso small{font-size:10.3px; color:var(--ink3); line-height:1.35; display:block}
+  .sep{color:var(--line); padding:0 7px; font-size:13px; flex:0 0 auto}
+
+  /* ---- backends ---- */
+  .nubes{display:flex; gap:14px}
+  .nube{flex:1; border:1px solid var(--line); border-radius:9px; overflow:hidden}
+  .nube-h{background:var(--band); padding:8px 13px; font-size:12.5px; font-weight:700;
+          border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center}
+  .nube-h em{font-style:normal; font-size:10.5px; font-weight:500; color:var(--ink3)}
+  .nube-b{padding:10px 13px 12px}
+  .bk{display:flex; align-items:center; gap:8px; font-size:11.8px; padding:4px 0}
+  .bk .dot{width:10px; height:10px; border-radius:2.5px; box-shadow:none; flex:0 0 auto}
+  .bk span{color:var(--ink)}
+  .bk em{font-style:normal; color:var(--ink3); font-size:10.5px; margin-left:auto}
+
+  /* ---- correlación ---- */
+  .corr{background:var(--dark); color:#fff; border-radius:11px; padding:15px 20px; margin-top:0}
+  .corr h2{margin:0 0 9px; font-size:15px; color:#fff}
+  .corr .k{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:#7dd3fc; font-size:12px}
+  .corr-grid{display:flex; gap:14px; margin-top:10px}
+  .corr-item{flex:1; background:rgba(255,255,255,.07); border-radius:7px; padding:9px 12px}
+  .corr-item b{font-size:11.5px; display:block; margin-bottom:3px}
+  .corr-item small{font-size:10.8px; color:#c9d3e4; line-height:1.5}
+  .pie{font-size:11px; color:#a9b4c7; margin:11px 0 0; line-height:1.5}
+</style>
+</head>
+<body>
+
+<h1>Arquitectura de observabilidad — pipeline OpenTelemetry end-to-end</h1>
+<p class="sub">Dos microservicios instrumentados con el SDK de OpenTelemetry, un Collector como capa de desacople,
+y tres entornos de despliegue con backends distintos por señal. La llave de correlación es el <b>trace_id</b>.</p>
+
+<div class="leyenda">
+  <b>Las tres señales</b>
+  <div class="sig"><span class="dot" style="background:var(--trazas)"></span>Trazas <small>— qué pasó y en qué orden</small></div>
+  <div class="sig"><span class="dot" style="background:var(--metricas)"></span>Métricas <small>— cuánto y con qué frecuencia</small></div>
+  <div class="sig"><span class="dot" style="background:var(--logs)"></span>Logs <small>— el detalle de cada evento</small></div>
+</div>
+
+<!-- CAPA 1 -->
+<div class="capa">
+  <div class="capa-head">
+    <span class="num">CAPA 1</span>
+    <h2>Instrumentación — el SDK dentro del proceso</h2>
+    <span>Aquí nacen las tres señales. Auto-instrumentación para lo genérico, spans manuales para la lógica de negocio.</span>
+  </div>
+  <div class="fila">
+    <div class="svc">
+      <h3>service-a</h3>
+      <p class="rol">Órdenes · FastAPI · puerto 8000</p>
+      <ul>
+        <li><b>Auto:</b> servidor FastAPI + cliente HTTPX</li>
+        <li><b>Span custom:</b> <code>orders.calculate_total</code><br>atributos: subtotal, descuento, total</li>
+        <li><b>Métricas:</b> <code>orders_processed_total</code>, <code>order_total_value</code></li>
+        <li><b>Logs:</b> JSON con <code>trace_id</code> y <code>span_id</code></li>
+      </ul>
+      <div style="margin-top:9px">
+        <span class="tag" style="background:var(--trazas)">TRAZAS</span>
+        <span class="tag" style="background:var(--metricas)">MÉTRICAS</span>
+        <span class="tag" style="background:var(--logs)">LOGS</span>
+      </div>
+    </div>
+
+    <div class="conector">
+      <div class="l"></div>
+      <small><b>Propagación de contexto</b><br>W3C TraceContext<br><code>traceparent</code></small>
+      <small style="margin-top:6px; color:var(--ink3)">El mismo trace_id<br>cruza el límite del servicio</small>
+    </div>
+
+    <div class="svc">
+      <h3>service-b</h3>
+      <p class="rol">Inventario · FastAPI + PostgreSQL · puerto 8001</p>
+      <ul>
+        <li><b>Auto:</b> servidor FastAPI + SQLAlchemy (spans <code>connect</code>, <code>SELECT</code>)</li>
+        <li><b>Span custom:</b> <code>inventory.check_stock</code><br>atributos: sku, stock, disponible</li>
+        <li><b>Métricas:</b> <code>inventory_stock_checks_total</code>, <code>inventory_check_duration_ms</code></li>
+        <li><b>Logs:</b> JSON con <code>trace_id</code> y <code>span_id</code></li>
+      </ul>
+      <div style="margin-top:9px">
+        <span class="tag" style="background:var(--trazas)">TRAZAS</span>
+        <span class="tag" style="background:var(--metricas)">MÉTRICAS</span>
+        <span class="tag" style="background:var(--logs)">LOGS</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="flecha">Exportación <b>OTLP gRPC :4317</b> — protocolo único para las tres señales. Las aplicaciones no conocen ningún backend.</div>
+
+<!-- CAPA 2 -->
+<div class="capa">
+  <div class="capa-head">
+    <span class="num">CAPA 2</span>
+    <h2>OTel Collector — recepción, protección y enrutamiento</h2>
+    <span>La pieza que desacopla: cambiar de Jaeger a X-Ray es editar YAML, no código.</span>
+  </div>
+  <div class="pipeline">
+    <div class="paso"><b>receivers</b><small>OTLP gRPC :4317<br>OTLP HTTP :4318</small></div>
+    <span class="sep">→</span>
+    <div class="paso"><b>memory_limiter</b><small>Aplica backpressure<br>y evita el OOM del Collector</small></div>
+    <span class="sep">→</span>
+    <div class="paso"><b>resourcedetection</b><small>Detecta GKE o ECS y estampa<br>cluster, zona, task ARN</small></div>
+    <span class="sep">→</span>
+    <div class="paso"><b>resource</b><small>Atributos propios<br>del entorno</small></div>
+    <span class="sep">→</span>
+    <div class="paso"><b>batch</b><small>Agrupa envíos y reduce<br>llamadas de red</small></div>
+    <span class="sep">→</span>
+    <div class="paso"><b>exporters</b><small>Bifurca por señal<br>hacia cada backend</small></div>
+  </div>
+  <p style="font-size:11.3px; color:var(--ink2); margin:11px 0 0; line-height:1.55">
+    <b>El orden importa.</b> <code style="background:#eef1f5;padding:1px 4px;border-radius:3px;font-size:10.8px">memory_limiter</code> va primero porque debe rechazar datos <em>antes</em> de que el Collector
+    gaste memoria procesándolos; <code style="background:#eef1f5;padding:1px 4px;border-radius:3px;font-size:10.8px">batch</code> va último porque agrupar antes de filtrar desperdiciaría trabajo.
+    El Collector además se observa a sí mismo: expone su telemetría interna en <b>:8888</b> (colas, exportaciones fallidas, CPU).
+  </p>
+</div>
+
+<div class="flecha">Bifurcación por señal — cada pilar viaja a un backend especializado, distinto en cada entorno</div>
+
+<!-- CAPA 3 -->
+<div class="capa">
+  <div class="capa-head">
+    <span class="num">CAPA 3</span>
+    <h2>Backends — el mismo pipeline, tres destinos</h2>
+    <span>La prueba de portabilidad: idéntica instrumentación, distinta infraestructura.</span>
+  </div>
+  <div class="nubes">
+    <div class="nube">
+      <div class="nube-h">Local <em>docker-compose</em></div>
+      <div class="nube-b">
+        <div class="bk"><span class="dot" style="background:var(--trazas)"></span><span>Jaeger</span><em>OTLP nativo</em></div>
+        <div class="bk"><span class="dot" style="background:var(--metricas)"></span><span>Prometheus</span><em>scrape :8889</em></div>
+        <div class="bk"><span class="dot" style="background:var(--logs)"></span><span>Loki</span><em>OTLP nativo</em></div>
+      </div>
+    </div>
+    <div class="nube">
+      <div class="nube-h">GCP <em>GKE Autopilot</em></div>
+      <div class="nube-b">
+        <div class="bk"><span class="dot" style="background:var(--trazas)"></span><span>Jaeger in-cluster</span><em>OTLP</em></div>
+        <div class="bk"><span class="dot" style="background:var(--metricas)"></span><span>Prometheus</span><em>scrape :8889</em></div>
+        <div class="bk"><span class="dot" style="background:var(--logs)"></span><span>Cloud Logging</span><em>Workload Identity</em></div>
+      </div>
+    </div>
+    <div class="nube">
+      <div class="nube-h">AWS <em>ECS Fargate · sidecar ADOT</em></div>
+      <div class="nube-b">
+        <div class="bk"><span class="dot" style="background:var(--trazas)"></span><span>AWS X-Ray</span><em>awsxray</em></div>
+        <div class="bk"><span class="dot" style="background:var(--metricas)"></span><span>Prometheus en ECS</span><em>scrape vía Cloud Map</em></div>
+        <div class="bk"><span class="dot" style="background:var(--logs)"></span><span>CloudWatch Logs</span><em>awscloudwatchlogs</em></div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:11.3px; color:var(--ink2); margin:11px 0 0; line-height:1.55">
+    <b>Dos patrones de despliegue del Collector.</b> En GKE es un <em>Deployment compartido</em>: ahorra recursos y centraliza la configuración.
+    En ECS es un <em>sidecar por task</em>: aísla fallos por servicio y es el patrón que AWS recomienda con ADOT, a costa de multiplicar el consumo.
+  </p>
+</div>
+
+<div class="flecha">Consulta y correlación</div>
+
+<!-- CAPA 4 -->
+<div class="corr">
+  <h2>Capa 4 — Visualización y correlación cross-signal</h2>
+  <p style="margin:0; font-size:12.5px; line-height:1.6">
+    Las tres señales se emiten por separado y se almacenan en sistemas distintos, pero comparten un identificador:
+    el <span class="k">trace_id</span> generado en el primer span y propagado por W3C TraceContext.
+    Ese identificador es lo que convierte tres flujos de datos aislados en una sola historia investigable.
+  </p>
+  <div class="corr-grid">
+    <div class="corr-item">
+      <b>Desde una métrica</b>
+      <small>Un pico de latencia p99 en el dashboard indica <em>cuándo</em> y <em>en qué servicio</em> ocurrió el problema, pero no por qué.</small>
+    </div>
+    <div class="corr-item">
+      <b>Hacia la traza</b>
+      <small>Se busca ese intervalo en Jaeger y se abre una traza lenta: los spans muestran qué operación consumió el tiempo.</small>
+    </div>
+    <div class="corr-item">
+      <b>Hacia los logs</b>
+      <small>Con el trace_id de esa traza se filtran los logs de <em>todos</em> los servicios involucrados y aparece el detalle del error.</small>
+    </div>
+  </div>
+  <p class="pie">
+    En Grafana el salto está automatizado: el datasource de Loki define un <em>derived field</em> sobre <span class="k">trace_id</span>
+    que abre la traza correspondiente en Jaeger con un clic. El dashboard incluye seis paneles — cuatro SLIs
+    (tráfico, errores, latencia p99/p95/p50 y métricas de negocio) más CPU del Collector y errores de exportación del propio pipeline.
+  </p>
+</div>
+
+</body>
+</html>
