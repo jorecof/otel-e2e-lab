@@ -13,9 +13,12 @@ provider "google" {
 
 # =============================================================================
 # PERFIL COSTO CERO
-#   - GKE Autopilot ZONAL: el free tier de GKE abona 74,40 USD/mes por facturación,
-#     lo que cubre la tarifa de gestión (0,10 USD/h) de UN cluster zonal o Autopilot.
-#     Importante: el crédito NO aplica a clusters regionales.
+#   - GKE Autopilot: el free tier de GKE abona 74,40 USD/mes por cuenta de
+#     facturación, equivalente a UN cluster Autopilot (o UN zonal Standard) al mes,
+#     lo que cubre la tarifa de gestión de 0,10 USD/h.
+#     Nota: Autopilot SIEMPRE es regional — la API rechaza clusters zonales con
+#     "Autopilot clusters must be regional clusters". La exclusión del crédito
+#     por regionalidad aplica a clusters de modo Standard, no a Autopilot.
 #   - Los pods de Autopilot sí se cobran por recursos solicitados
 #     (~0,0445 USD/vCPU-h). Con 1 réplica por servicio el laboratorio consume
 #     ~1 vCPU y ~1,5 GiB => ~0,05 USD/h, cubierto por los 300 USD del free trial.
@@ -31,10 +34,10 @@ resource "google_artifact_registry_repository" "repo" {
   format        = "DOCKER"
 }
 
-# ---------- Cluster GKE Autopilot (ZONAL para caer en el free tier) ----------
+# ---------- Cluster GKE Autopilot ----------
 resource "google_container_cluster" "gke" {
   name     = "otel-lab"
-  location = var.zone # zona, no región: un cluster regional pierde el crédito
+  location = var.region # Autopilot exige ubicación regional
 
   enable_autopilot    = true
   deletion_protection = false
@@ -61,6 +64,11 @@ resource "google_service_account_iam_member" "wi_binding" {
   service_account_id = google_service_account.otel_collector.name
   role               = "roles/iam.workloadIdentityUser"
   member             = "serviceAccount:${var.project_id}.svc.id.goog[observability/otel-collector]"
+
+  # El pool de identidades (PROJECT.svc.id.goog) solo existe después de que se
+  # crea el primer cluster con Workload Identity. Sin esta dependencia, el apply
+  # falla con "Identity Pool does not exist".
+  depends_on = [google_container_cluster.gke]
 }
 
 # ---------- Despliegue de la aplicación + pipeline con Helm ----------

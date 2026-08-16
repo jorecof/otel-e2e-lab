@@ -10,7 +10,7 @@ gratuitos**, **eliminar los recursos caros** y **destruir todo el mismo día**.
 
 | Recurso | Costo normal | Qué se hizo |
 |---|---|---|
-| GKE — tarifa de gestión | 0,10 USD/h | Cluster **zonal Autopilot**: el free tier de GKE abona 74,40 USD/mes, que la cubre entera |
+| GKE — tarifa de gestión | 0,10 USD/h | Cluster **Autopilot**: el free tier de GKE abona 74,40 USD/mes (equivale a un cluster Autopilot), que la cubre entera. Autopilot siempre es regional: la API rechaza clusters zonales |
 | GKE — recursos de pods | ~0,0445 USD/vCPU-h | 1 réplica por servicio, requests mínimos de Autopilot → ~0,068 USD/h |
 | Balanceador de Google | ~0,025 USD/h por regla | **Eliminado**: Services en ClusterIP + `kubectl port-forward` (gratis) |
 | AWS ALB | ~0,0225 USD/h + LCU | **Eliminado**: IP pública directa en la task de service-a |
@@ -26,8 +26,8 @@ y ese monto se descuenta de los créditos gratuitos, no de tu tarjeta.
 
 ### Créditos disponibles (verificado en agosto de 2026)
 
-- **Google Cloud**: 300 USD en créditos para cuentas nuevas, más un tramo *Always Free*
-  permanente que incluye un cluster Autopilot o zonal al mes.
+- **Google Cloud**: 300 USD en créditos para cuentas nuevas, más el crédito mensual de
+  GKE (74,40 USD) que cubre un cluster Autopilot o un zonal Standard al mes.
 - **AWS**: desde julio de 2025 el free tier da **100 USD al registrarse y hasta 100 USD
   adicionales** por usar ciertos servicios (200 USD en total). El plan gratuito dura
   6 meses o hasta agotar los créditos, lo que ocurra primero.
@@ -66,7 +66,7 @@ Requisitos: `gcloud`, `terraform`, `kubectl`, `helm` y Docker corriendo.
 ```bash
 gcloud auth login
 gcloud config set project TU_PROYECTO
-bash scripts/gcp-deploy.sh TU_PROYECTO us-central1-a
+bash scripts/gcp-deploy.sh TU_PROYECTO us-central1
 ```
 
 El script habilita APIs, crea el cluster, publica las imágenes, despliega el chart
@@ -90,7 +90,7 @@ for i in $(seq 1 40); do curl -s "localhost:8000/api/orders/$((RANDOM%5+1))?qty=
 **Destruye cuando termines:**
 
 ```bash
-bash scripts/gcp-destroy.sh TU_PROYECTO us-central1-a
+bash scripts/gcp-destroy.sh TU_PROYECTO us-central1
 ```
 
 ---

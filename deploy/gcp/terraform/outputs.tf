@@ -13,7 +13,7 @@ output "collector_service_account" {
 
 output "credenciales_kubectl" {
   description = "Conecta kubectl al cluster"
-  value       = "gcloud container clusters get-credentials ${google_container_cluster.gke.name} --zone ${var.zone} --project ${var.project_id}"
+  value       = "gcloud container clusters get-credentials ${google_container_cluster.gke.name} --region ${var.region} --project ${var.project_id}"
 }
 
 # Los Services son ClusterIP (no LoadBalancer) para evitar el costo del

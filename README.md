@@ -28,7 +28,7 @@ y **trazas distribuidas** (Jaeger/X-Ray) — desde dos microservicios FastAPI, c
 ```
 
 En **GCP** el Collector corre en GKE (logs → Cloud Logging); en **AWS** corre como
-sidecar en ECS Fargate (trazas → X-Ray, métricas → AMP, logs → CloudWatch).
+sidecar en ECS Fargate (trazas → X-Ray, métricas → Prometheus, logs → CloudWatch).
 
 ## Estructura del repositorio
 
@@ -37,7 +37,7 @@ services/service-a/        # Órdenes: FastAPI + httpx (auto-instr) + custom spa
 services/service-b/        # Inventario: FastAPI + SQLAlchemy/Postgres (auto-instr) + custom span inventory.check_stock
 collector/                 # Config OTel Collector: local, GCP (GKE) y AWS (ECS)
 deploy/local/              # docker-compose con todo el stack + Grafana aprovisionada
-deploy/gcp/terraform/      # GKE Autopilot zonal + Artifact Registry + Workload Identity + presupuesto
+deploy/gcp/terraform/      # GKE Autopilot + Artifact Registry + Workload Identity + presupuesto
 deploy/gcp/helm/otel-lab/  # Chart: apps + Collector + Jaeger
 deploy/aws/terraform/      # ECS Fargate + X-Ray + CloudWatch + Prometheus + ADOT sidecar + presupuesto
 scripts/                   # Despliegue y destrucción automatizados de ambas nubes
@@ -67,8 +67,8 @@ for i in $(seq 1 50); do curl -s "localhost:8000/api/orders/$((RANDOM%5+1))?qty=
 
 ## Despliegue en las dos nubes — perfil costo cero
 
-La IaC está afinada para no generar costo: cluster GKE **zonal** Autopilot (cubierto por
-el crédito del free tier de GKE), **sin balanceadores** en ninguna de las dos nubes,
+La IaC está afinada para no generar costo: cluster GKE **Autopilot** (cubierto por
+el crédito mensual del free tier de GKE), **sin balanceadores** en ninguna de las dos nubes,
 **sin Amazon Managed Prometheus**, tasks de Fargate mínimas y retención de logs corta.
 Una sesión de laboratorio de ~2 horas en ambas nubes cuesta menos de 0,35 USD, cubiertos
 por los créditos gratuitos.
@@ -78,8 +78,8 @@ por los créditos gratuitos.
 
 ```bash
 # GCP: habilita APIs, crea el cluster, publica imágenes y despliega el chart
-bash scripts/gcp-deploy.sh TU_PROYECTO us-central1-a
-bash scripts/gcp-destroy.sh TU_PROYECTO us-central1-a   # al terminar
+bash scripts/gcp-deploy.sh TU_PROYECTO us-central1
+bash scripts/gcp-destroy.sh TU_PROYECTO us-central1   # al terminar
 
 # AWS: crea ECR, publica imágenes, despliega ECS y muestra las IPs públicas
 bash scripts/aws-deploy.sh us-east-1
@@ -110,5 +110,5 @@ Resultados medidos en `benchmark/results/` y análisis completo en
 | Pilar    | Emisión (SDK)                                    | Transporte | Backend local | GCP | AWS |
 |----------|--------------------------------------------------|-----------|---------------|-----|-----|
 | Trazas   | Auto-instr FastAPI/HTTPX/SQLAlchemy + custom spans | OTLP gRPC | Jaeger        | Jaeger (GKE) | X-Ray |
-| Métricas | Counters/histogramas custom + http.server.duration | OTLP gRPC | Prometheus    | Prometheus | AMP |
+| Métricas | Counters/histogramas custom + http.server.duration | OTLP gRPC | Prometheus    | Prometheus | Prometheus en ECS |
 | Logs     | JSON con `trace_id`/`span_id` inyectados          | OTLP gRPC | Loki          | Cloud Logging | CloudWatch |

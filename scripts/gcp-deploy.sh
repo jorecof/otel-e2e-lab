@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
-# Despliegue completo en GCP (GKE Autopilot zonal, perfil costo cero).
-# Uso: scripts/gcp-deploy.sh <PROJECT_ID> [ZONA]
+# Despliegue completo en GCP (GKE Autopilot regional, perfil costo cero).
+# Uso: scripts/gcp-deploy.sh <PROJECT_ID> [REGION]
 set -euo pipefail
 
 PROJECT="${1:?Uso: $0 <PROJECT_ID> [ZONA]}"
-ZONE="${2:-us-central1-a}"
-REGION="${ZONE%-*}"
+# Acepta región ("us-central1") o zona ("us-central1-a") y normaliza a región:
+# GKE Autopilot solo admite ubicaciones regionales.
+LOC="${2:-us-central1}"
+if [[ "$LOC" =~ ^(.*-[a-z]+[0-9]+)-[a-z]$ ]]; then
+  REGION="${BASH_REMATCH[1]}"
+  echo "    (aviso: '$LOC' es una zona; Autopilot es regional -> se usará '$REGION')"
+else
+  REGION="$LOC"
+fi
 REPO="${REGION}-docker.pkg.dev/${PROJECT}/otel-lab"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -17,7 +24,7 @@ if [ -n "$BILLING_ACCOUNT_ID" ]; then
   TF_BUDGET_VAR=(-var "billing_account_id=$BILLING_ACCOUNT_ID")
 fi
 
-echo "==> Proyecto: $PROJECT | Zona: $ZONE"
+echo "==> Proyecto: $PROJECT | Región: $REGION"
 
 echo "==> 1/5 Habilitando APIs necesarias"
 gcloud services enable container.googleapis.com artifactregistry.googleapis.com \
@@ -33,7 +40,7 @@ cd "$ROOT/deploy/gcp/terraform"
 terraform init -input=false
 # Se crean primero registro y cluster; el chart necesita las imágenes publicadas
 terraform apply -input=false -auto-approve \
-  -var "project_id=$PROJECT" -var "zone=$ZONE" -var "region=$REGION" \
+  -var "project_id=$PROJECT" -var "region=$REGION" \
   "${TF_BUDGET_VAR[@]+"${TF_BUDGET_VAR[@]}"}" \
   -target=google_artifact_registry_repository.repo \
   -target=google_container_cluster.gke \
@@ -50,11 +57,11 @@ done
 
 echo "==> 4/5 Desplegando la aplicación con Helm"
 terraform apply -input=false -auto-approve \
-  -var "project_id=$PROJECT" -var "zone=$ZONE" -var "region=$REGION" \
+  -var "project_id=$PROJECT" -var "region=$REGION" \
   "${TF_BUDGET_VAR[@]+"${TF_BUDGET_VAR[@]}"}"
 
 echo "==> 5/5 Verificando"
-gcloud container clusters get-credentials otel-lab --zone "$ZONE" --project "$PROJECT"
+gcloud container clusters get-credentials otel-lab --region "$REGION" --project "$PROJECT"
 kubectl -n observability rollout status deploy/service-a --timeout=300s
 kubectl -n observability rollout status deploy/service-b --timeout=300s
 kubectl -n observability get pods
@@ -70,5 +77,5 @@ LISTO. Para generar tráfico y ver evidencias:
   Jaeger UI:      http://localhost:16686
   Cloud Logging:  https://console.cloud.google.com/logs/query?project=$PROJECT
 
-CUANDO TERMINES, DESTRUYE TODO:  scripts/gcp-destroy.sh $PROJECT $ZONE
+CUANDO TERMINES, DESTRUYE TODO:  scripts/gcp-destroy.sh $PROJECT $REGION
 EOF

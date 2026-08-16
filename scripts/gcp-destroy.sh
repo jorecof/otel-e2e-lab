@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 # Destruye TODO lo creado en GCP y verifica que no quede nada facturando.
-# Uso: scripts/gcp-destroy.sh <PROJECT_ID> [ZONA]
+# Uso: scripts/gcp-destroy.sh <PROJECT_ID> [REGION]
 set -euo pipefail
 
-PROJECT="${1:?Uso: $0 <PROJECT_ID> [ZONA]}"
-ZONE="${2:-us-central1-a}"
-REGION="${ZONE%-*}"
+PROJECT="${1:?Uso: $0 <PROJECT_ID> [REGION]}"
+LOC="${2:-us-central1}"
+if [[ "$LOC" =~ ^(.*-[a-z]+[0-9]+)-[a-z]$ ]]; then
+  REGION="${BASH_REMATCH[1]}"
+else
+  REGION="$LOC"
+fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 cd "$ROOT/deploy/gcp/terraform"
 terraform destroy -input=false -auto-approve \
-  -var "project_id=$PROJECT" -var "zone=$ZONE" -var "region=$REGION"
+  -var "project_id=$PROJECT" -var "region=$REGION"
 
 echo
 echo "==> Verificación: nada debe aparecer debajo de cada línea"

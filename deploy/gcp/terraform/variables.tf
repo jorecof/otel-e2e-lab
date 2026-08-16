@@ -4,18 +4,13 @@ variable "project_id" {
 }
 
 variable "region" {
-  description = "Región (usada por Artifact Registry)"
-  type        = string
-  default     = "us-central1"
-}
-
-variable "zone" {
   description = <<-EOT
-    Zona del cluster. DEBE ser una zona (no una región): el crédito del free tier
-    de GKE solo cubre clusters zonales o Autopilot, nunca regionales.
+    Región del cluster y de Artifact Registry. GKE Autopilot solo admite
+    ubicaciones regionales; el crédito del free tier de GKE (74,40 USD/mes)
+    cubre un cluster Autopilot al mes.
   EOT
   type        = string
-  default     = "us-central1-a"
+  default     = "us-central1"
 }
 
 variable "billing_account_id" {
