@@ -28,6 +28,13 @@ jaeger:
   image: jaegertracing/all-in-one:1.62.0
   maxTraces: 5000           # acota la memoria del almacenamiento en RAM
 
+prometheus:
+  image: quay.io/prometheus/prometheus:v3.1.0   # registro oficial del proyecto
+  retention: 6h                                 # almacenamiento efímero (emptyDir)
+
+grafana:
+  image: grafana/grafana:11.4.0
+
 postgres:
   image: postgres:16-alpine
   user: otel

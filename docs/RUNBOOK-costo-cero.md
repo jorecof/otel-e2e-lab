@@ -11,7 +11,7 @@ gratuitos**, **eliminar los recursos caros** y **destruir todo el mismo día**.
 | Recurso | Costo normal | Qué se hizo |
 |---|---|---|
 | GKE — tarifa de gestión | 0,10 USD/h | Cluster **Autopilot**: el free tier de GKE abona 74,40 USD/mes (equivale a un cluster Autopilot), que la cubre entera. Autopilot siempre es regional: la API rechaza clusters zonales |
-| GKE — recursos de pods | ~0,0445 USD/vCPU-h | 1 réplica por servicio, requests mínimos de Autopilot → ~0,068 USD/h |
+| GKE — recursos de pods | ~0,0445 USD/vCPU-h | 1 réplica por servicio (7 pods: apps, Postgres, Collector, Jaeger, Prometheus, Grafana), requests mínimos de Autopilot → ~0,095 USD/h |
 | Balanceador de Google | ~0,025 USD/h por regla | **Eliminado**: Services en ClusterIP + `kubectl port-forward` (gratis) |
 | AWS ALB | ~0,0225 USD/h + LCU | **Eliminado**: IP pública directa en la task de service-a |
 | Amazon Managed Prometheus | cobra desde la 1.ª muestra | **Eliminado**: una task de Prometheus scrapea el endpoint del Collector |
@@ -77,15 +77,19 @@ y espera a que los pods estén listos. Al terminar imprime los comandos de acces
 ```bash
 kubectl -n observability port-forward svc/service-a 8000:8000 &
 kubectl -n observability port-forward svc/jaeger-ui 16686:16686 &
+kubectl -n observability port-forward svc/grafana 3000:3000 &
+kubectl -n observability port-forward svc/prometheus 9090:9090 &
 for i in $(seq 1 40); do curl -s "localhost:8000/api/orders/$((RANDOM%5+1))?qty=2" >/dev/null; done
 ```
 
 1. **Jaeger en GKE** → `http://localhost:16686`, busca `service-a`, abre una traza
    completa. Captura la vista de timeline con los 11 spans.
-2. **Cloud Logging** → consola de GCP → Logging → consulta
+2. **Grafana en GKE** → `http://localhost:3000`, carpeta "OTel Lab", dashboard
+   "SLIs y salud del pipeline". Captura los 6 paneles con datos reales del cluster.
+3. **Cloud Logging** → consola de GCP → Logging → consulta
    `logName="projects/TU_PROYECTO/logs/otel-lab"`. Expande una entrada y muestra el
    campo `trace_id`: esa es la evidencia de correlación en GCP.
-3. **Pods corriendo** → `kubectl -n observability get pods -o wide` (captura de terminal).
+4. **Pods corriendo** → `kubectl -n observability get pods -o wide` (captura de terminal).
 
 **Destruye cuando termines:**
 

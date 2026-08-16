@@ -63,8 +63,9 @@ terraform apply -input=false -auto-approve \
 
 echo "==> 5/5 Verificando"
 gcloud container clusters get-credentials otel-lab --region "$REGION" --project "$PROJECT"
-kubectl -n observability rollout status deploy/service-a --timeout=300s
-kubectl -n observability rollout status deploy/service-b --timeout=300s
+for d in service-a service-b prometheus grafana; do
+  kubectl -n observability rollout status "deploy/$d" --timeout=300s
+done
 kubectl -n observability get pods
 
 cat <<EOF
@@ -73,9 +74,13 @@ LISTO. Para generar tráfico y ver evidencias:
 
   kubectl -n observability port-forward svc/service-a 8000:8000 &
   kubectl -n observability port-forward svc/jaeger-ui 16686:16686 &
+  kubectl -n observability port-forward svc/grafana 3000:3000 &
+  kubectl -n observability port-forward svc/prometheus 9090:9090 &
   for i in \$(seq 1 40); do curl -s "localhost:8000/api/orders/\$((RANDOM%5+1))?qty=2" >/dev/null; done
 
   Jaeger UI:      http://localhost:16686
+  Grafana:        http://localhost:3000   (dashboard "OTel Lab — SLIs")
+  Prometheus:     http://localhost:9090
   Cloud Logging:  https://console.cloud.google.com/logs/query?project=$PROJECT
 
 CUANDO TERMINES, DESTRUYE TODO:  scripts/gcp-destroy.sh $PROJECT $REGION
