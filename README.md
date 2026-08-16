@@ -37,11 +37,12 @@ services/service-a/        # Órdenes: FastAPI + httpx (auto-instr) + custom spa
 services/service-b/        # Inventario: FastAPI + SQLAlchemy/Postgres (auto-instr) + custom span inventory.check_stock
 collector/                 # Config OTel Collector: local, GCP (GKE) y AWS (ECS)
 deploy/local/              # docker-compose con todo el stack + Grafana aprovisionada
-deploy/gcp/terraform/      # GKE Autopilot + Artifact Registry + Workload Identity
+deploy/gcp/terraform/      # GKE Autopilot zonal + Artifact Registry + Workload Identity + presupuesto
 deploy/gcp/helm/otel-lab/  # Chart: apps + Collector + Jaeger
-deploy/aws/terraform/      # ECS Fargate + ALB + X-Ray + AMP + CloudWatch + ADOT sidecar
+deploy/aws/terraform/      # ECS Fargate + X-Ray + CloudWatch + Prometheus + ADOT sidecar + presupuesto
+scripts/                   # Despliegue y destrucción automatizados de ambas nubes
 benchmark/                 # k6 (75 VUs, 5 min) + monitor de CPU/RAM + resultados
-docs/                      # Reporte técnico PDF + capturas
+docs/                      # Reporte técnico PDF + runbook costo cero + capturas
 ```
 
 ## Ejecución local (5 minutos)
@@ -64,27 +65,30 @@ for i in $(seq 1 50); do curl -s "localhost:8000/api/orders/$((RANDOM%5+1))?qty=
 `{service_name="service-a"}`; cada log muestra su `trace_id` y el derived field
 **TraceID** abre la traza correspondiente en Jaeger (mismo `trace_id` en los 3 pilares).
 
-## Despliegue GCP (GKE)
+## Despliegue en las dos nubes — perfil costo cero
+
+La IaC está afinada para no generar costo: cluster GKE **zonal** Autopilot (cubierto por
+el crédito del free tier de GKE), **sin balanceadores** en ninguna de las dos nubes,
+**sin Amazon Managed Prometheus**, tasks de Fargate mínimas y retención de logs corta.
+Una sesión de laboratorio de ~2 horas en ambas nubes cuesta menos de 0,35 USD, cubiertos
+por los créditos gratuitos.
+
+**El procedimiento completo, con capturas a tomar y checklist de cierre, está en
+[`docs/RUNBOOK-costo-cero.md`](docs/RUNBOOK-costo-cero.md).** Resumen:
 
 ```bash
-# 1. Construir y subir imágenes
-gcloud auth configure-docker us-central1-docker.pkg.dev
-docker build -t us-central1-docker.pkg.dev/$PROJECT/otel-lab/service-a:1.0.0 services/service-a && docker push ...
-docker build -t us-central1-docker.pkg.dev/$PROJECT/otel-lab/service-b:1.0.0 services/service-b && docker push ...
-# 2. Infraestructura + despliegue
-cd deploy/gcp/terraform
-terraform init && terraform apply -var project_id=$PROJECT
+# GCP: habilita APIs, crea el cluster, publica imágenes y despliega el chart
+bash scripts/gcp-deploy.sh TU_PROYECTO us-central1-a
+bash scripts/gcp-destroy.sh TU_PROYECTO us-central1-a   # al terminar
+
+# AWS: crea ECR, publica imágenes, despliega ECS y muestra las IPs públicas
+bash scripts/aws-deploy.sh us-east-1
+bash scripts/aws-destroy.sh us-east-1                   # al terminar
 ```
 
-## Despliegue AWS (ECS Fargate)
-
-```bash
-aws ecr get-login-password | docker login --username AWS --password-stdin $ACCOUNT.dkr.ecr.us-east-1.amazonaws.com
-docker build -t $ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/otel-lab/service-a:1.0.0 services/service-a && docker push ...
-docker build -t $ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/otel-lab/service-b:1.0.0 services/service-b && docker push ...
-cd deploy/aws/terraform
-terraform init && terraform apply
-```
+Los scripts de `destroy` verifican que no quede ningún recurso facturando.
+Para activar las alertas de presupuesto (recomendado), pasa
+`-var billing_account_id=...` en GCP y `-var budget_alert_email=...` en AWS.
 
 ## Benchmark de overhead
 

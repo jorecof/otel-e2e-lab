@@ -11,8 +11,8 @@ receivers:
 processors:
   memory_limiter:
     check_interval: 1s
-    limit_mib: 800
-    spike_limit_mib: 200
+    limit_mib: 400          # ajustado al request de 512Mi del pod en Autopilot
+    spike_limit_mib: 100
   resourcedetection/gcp:
     detectors: [env, gcp]      # añade cloud.provider, k8s cluster, zona, etc.
     timeout: 5s

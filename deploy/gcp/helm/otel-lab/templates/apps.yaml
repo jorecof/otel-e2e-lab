@@ -1,4 +1,4 @@
-# ---------- service-b (inventario + PostgreSQL) ----------
+# ---------- service-b (inventario) ----------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,9 +23,11 @@ spec:
             - { name: DEPLOY_ENV, value: gke }
           readinessProbe:
             httpGet: { path: /health, port: 8001 }
+            initialDelaySeconds: 5
           resources:
-            requests: { cpu: 250m, memory: 256Mi }
-            limits: { cpu: 500m, memory: 512Mi }
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
 ---
 apiVersion: v1
 kind: Service
@@ -35,7 +37,7 @@ spec:
   selector: { app: service-b }
   ports: [{ port: 8001, targetPort: 8001 }]
 ---
-# ---------- service-a (órdenes, expuesto vía LoadBalancer) ----------
+# ---------- service-a (órdenes) ----------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -60,18 +62,20 @@ spec:
             - { name: DEPLOY_ENV, value: gke }
           readinessProbe:
             httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 5
           resources:
-            requests: { cpu: 250m, memory: 256Mi }
-            limits: { cpu: 500m, memory: 512Mi }
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: service-a
 spec:
-  type: LoadBalancer
+  type: {{ .Values.service.type }}
   selector: { app: service-a }
-  ports: [{ port: 80, targetPort: 8000 }]
+  ports: [{ port: 8000, targetPort: 8000 }]
 ---
 # ---------- PostgreSQL (solo para el laboratorio) ----------
 apiVersion: apps/v1
@@ -94,7 +98,9 @@ spec:
             - { name: POSTGRES_PASSWORD, value: {{ .Values.postgres.password | quote }} }
             - { name: POSTGRES_DB, value: {{ .Values.postgres.database | quote }} }
           resources:
-            requests: { cpu: 250m, memory: 256Mi }
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
 ---
 apiVersion: v1
 kind: Service

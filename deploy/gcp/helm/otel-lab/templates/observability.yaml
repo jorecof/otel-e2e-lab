@@ -42,8 +42,9 @@ spec:
           volumeMounts:
             - { name: config, mountPath: /etc/otelcol }
           resources:
-            requests: { cpu: 500m, memory: 512Mi }
-            limits: { cpu: "1", memory: 1Gi }
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
       volumes:
         - name: config
           configMap: { name: otel-collector-config }
@@ -76,11 +77,16 @@ spec:
       containers:
         - name: jaeger
           image: {{ .Values.jaeger.image }}
+          args: ["--memory.max-traces={{ .Values.jaeger.maxTraces }}"]
           env:
             - { name: COLLECTOR_OTLP_ENABLED, value: "true" }
           ports:
             - { containerPort: 16686 }  # UI
             - { containerPort: 4317 }   # OTLP
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
 ---
 apiVersion: v1
 kind: Service
@@ -91,12 +97,13 @@ spec:
   ports:
     - { name: otlp-grpc, port: 4317, targetPort: 4317 }
 ---
+# UI de Jaeger: ClusterIP + `kubectl port-forward` (un LoadBalancer costaría por hora)
 apiVersion: v1
 kind: Service
 metadata:
   name: jaeger-ui
 spec:
-  type: LoadBalancer
+  type: {{ .Values.service.type }}
   selector: { app: jaeger }
   ports:
-    - { port: 80, targetPort: 16686 }
+    - { port: 16686, targetPort: 16686 }

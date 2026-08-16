@@ -1,5 +1,10 @@
-# OTel Collector - AWS (ECS Fargate, sidecar). Imagen: otel/opentelemetry-collector-contrib
-# Trazas -> AWS X-Ray | Métricas -> Amazon Managed Prometheus | Logs -> CloudWatch Logs
+# OTel Collector - AWS (ECS Fargate, sidecar). Imagen: aws-otel-collector (ADOT)
+# Perfil COSTO CERO: solo servicios cubiertos por el free tier de AWS.
+#   Trazas   -> AWS X-Ray            (free tier: 100.000 trazas registradas/mes)
+#   Métricas -> endpoint Prometheus  (scrapeado por la task de Prometheus del cluster)
+#   Logs     -> CloudWatch Logs      (free tier: 5 GB de ingesta/mes)
+# Nota: NO se usa Amazon Managed Prometheus (AMP) porque cobra por ingesta desde
+# la primera muestra; el exporter `prometheus` local cumple la misma función sin costo.
 receivers:
   otlp:
     protocols:
@@ -11,44 +16,41 @@ receivers:
 processors:
   memory_limiter:
     check_interval: 1s
-    limit_mib: 400
-    spike_limit_mib: 100
+    limit_mib: 160          # ajustado al tamaño de task reducido (512 MB)
+    spike_limit_mib: 40
   resourcedetection/ecs:
-    detectors: [env, ecs]      # añade cloud.provider, aws.ecs.task.arn, etc.
+    detectors: [env, ecs]   # añade cloud.provider, aws.ecs.task.arn, etc.
     timeout: 5s
   resource:
     attributes:
       - key: deployment.platform
         value: ecs-fargate
         action: upsert
+  # Para acotar X-Ray al free tier bajo carga sostenida, muestrea en el SDK
+  # (head-based, sin costo de red): en la task de la aplicación define
+  #   OTEL_TRACES_SAMPLER=parentbased_traceidratio
+  #   OTEL_TRACES_SAMPLER_ARG=0.1
   batch:
     timeout: 5s
     send_batch_size: 1024
 
 exporters:
-  # Trazas -> X-Ray (el IAM Task Role necesita AWSXRayDaemonWriteAccess)
+  # Trazas -> X-Ray (el IAM Task Role usa AWSXRayDaemonWriteAccess)
   awsxray:
     region: ${env:AWS_REGION}
     index_all_attributes: true
-  # Métricas -> Amazon Managed Service for Prometheus vía remote write (sigv4)
-  prometheusremotewrite/amp:
-    endpoint: ${env:AMP_REMOTE_WRITE_URL}
-    auth:
-      authenticator: sigv4auth
+  # Métricas -> expuestas para scrape de Prometheus (sin costo)
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    send_timestamps: true
+    metric_expiration: 5m
   # Logs -> CloudWatch Logs (trace_id queda en cada evento para correlación)
   awscloudwatchlogs:
     region: ${env:AWS_REGION}
     log_group_name: /otel-lab/services
     log_stream_name: otel-collector
-  debug:
-    verbosity: basic
-
-extensions:
-  sigv4auth:
-    region: ${env:AWS_REGION}
 
 service:
-  extensions: [sigv4auth]
   telemetry:
     metrics:
       readers:
@@ -65,7 +67,7 @@ service:
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, resourcedetection/ecs, resource, batch]
-      exporters: [prometheusremotewrite/amp]
+      exporters: [prometheus]
     logs:
       receivers: [otlp]
       processors: [memory_limiter, resourcedetection/ecs, resource, batch]
