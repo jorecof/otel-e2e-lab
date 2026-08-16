@@ -1,0 +1,20 @@
+image:
+  registry: REGION-docker.pkg.dev/PROJECT/otel-lab   # sobrescrito por Terraform
+  tag: "1.0.0"
+
+replicas:
+  serviceA: 2
+  serviceB: 2
+
+collector:
+  image: otel/opentelemetry-collector-contrib:0.116.1
+  gcpServiceAccount: ""     # sobrescrito por Terraform (Workload Identity)
+
+jaeger:
+  image: jaegertracing/all-in-one:1.62.0
+
+postgres:
+  image: postgres:16-alpine
+  user: otel
+  password: otel            # en producción: usar Secret Manager
+  database: inventory

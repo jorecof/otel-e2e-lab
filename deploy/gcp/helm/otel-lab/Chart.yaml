@@ -1,0 +1,6 @@
+apiVersion: v2
+name: otel-lab
+description: Pipeline OpenTelemetry end-to-end (service-a, service-b, OTel Collector, Jaeger)
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

@@ -1,0 +1,105 @@
+# ---------- service-b (inventario + PostgreSQL) ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-b
+  labels: { app: service-b }
+spec:
+  replicas: {{ .Values.replicas.serviceB }}
+  selector: { matchLabels: { app: service-b } }
+  template:
+    metadata:
+      labels: { app: service-b }
+    spec:
+      containers:
+        - name: service-b
+          image: "{{ .Values.image.registry }}/service-b:{{ .Values.image.tag }}"
+          ports: [{ containerPort: 8001 }]
+          env:
+            - { name: OTEL_ENABLED, value: "true" }
+            - { name: OTEL_SERVICE_NAME, value: service-b }
+            - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://otel-collector:4317" }
+            - { name: DATABASE_URL, value: "postgresql+psycopg2://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@postgres:5432/{{ .Values.postgres.database }}" }
+            - { name: DEPLOY_ENV, value: gke }
+          readinessProbe:
+            httpGet: { path: /health, port: 8001 }
+          resources:
+            requests: { cpu: 250m, memory: 256Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-b
+spec:
+  selector: { app: service-b }
+  ports: [{ port: 8001, targetPort: 8001 }]
+---
+# ---------- service-a (órdenes, expuesto vía LoadBalancer) ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-a
+  labels: { app: service-a }
+spec:
+  replicas: {{ .Values.replicas.serviceA }}
+  selector: { matchLabels: { app: service-a } }
+  template:
+    metadata:
+      labels: { app: service-a }
+    spec:
+      containers:
+        - name: service-a
+          image: "{{ .Values.image.registry }}/service-a:{{ .Values.image.tag }}"
+          ports: [{ containerPort: 8000 }]
+          env:
+            - { name: OTEL_ENABLED, value: "true" }
+            - { name: OTEL_SERVICE_NAME, value: service-a }
+            - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://otel-collector:4317" }
+            - { name: SERVICE_B_URL, value: "http://service-b:8001" }
+            - { name: DEPLOY_ENV, value: gke }
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+          resources:
+            requests: { cpu: 250m, memory: 256Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-a
+spec:
+  type: LoadBalancer
+  selector: { app: service-a }
+  ports: [{ port: 80, targetPort: 8000 }]
+---
+# ---------- PostgreSQL (solo para el laboratorio) ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: postgres } }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          ports: [{ containerPort: 5432 }]
+          env:
+            - { name: POSTGRES_USER, value: {{ .Values.postgres.user | quote }} }
+            - { name: POSTGRES_PASSWORD, value: {{ .Values.postgres.password | quote }} }
+            - { name: POSTGRES_DB, value: {{ .Values.postgres.database | quote }} }
+          resources:
+            requests: { cpu: 250m, memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector: { app: postgres }
+  ports: [{ port: 5432, targetPort: 5432 }]

@@ -1,0 +1,72 @@
+# OTel Collector - AWS (ECS Fargate, sidecar). Imagen: otel/opentelemetry-collector-contrib
+# Trazas -> AWS X-Ray | Métricas -> Amazon Managed Prometheus | Logs -> CloudWatch Logs
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 400
+    spike_limit_mib: 100
+  resourcedetection/ecs:
+    detectors: [env, ecs]      # añade cloud.provider, aws.ecs.task.arn, etc.
+    timeout: 5s
+  resource:
+    attributes:
+      - key: deployment.platform
+        value: ecs-fargate
+        action: upsert
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+
+exporters:
+  # Trazas -> X-Ray (el IAM Task Role necesita AWSXRayDaemonWriteAccess)
+  awsxray:
+    region: ${env:AWS_REGION}
+    index_all_attributes: true
+  # Métricas -> Amazon Managed Service for Prometheus vía remote write (sigv4)
+  prometheusremotewrite/amp:
+    endpoint: ${env:AMP_REMOTE_WRITE_URL}
+    auth:
+      authenticator: sigv4auth
+  # Logs -> CloudWatch Logs (trace_id queda en cada evento para correlación)
+  awscloudwatchlogs:
+    region: ${env:AWS_REGION}
+    log_group_name: /otel-lab/services
+    log_stream_name: otel-collector
+  debug:
+    verbosity: basic
+
+extensions:
+  sigv4auth:
+    region: ${env:AWS_REGION}
+
+service:
+  extensions: [sigv4auth]
+  telemetry:
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection/ecs, resource, batch]
+      exporters: [awsxray]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection/ecs, resource, batch]
+      exporters: [prometheusremotewrite/amp]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection/ecs, resource, batch]
+      exporters: [awscloudwatchlogs]
