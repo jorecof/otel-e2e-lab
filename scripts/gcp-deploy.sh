@@ -9,11 +9,24 @@ REGION="${ZONE%-*}"
 REPO="${REGION}-docker.pkg.dev/${PROJECT}/otel-lab"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+# Opcional: exporta BILLING_ACCOUNT_ID para crear la alerta de presupuesto.
+#   export BILLING_ACCOUNT_ID=019761-DB9128-F59D76
+BILLING_ACCOUNT_ID="${BILLING_ACCOUNT_ID:-}"
+TF_BUDGET_VAR=()
+if [ -n "$BILLING_ACCOUNT_ID" ]; then
+  TF_BUDGET_VAR=(-var "billing_account_id=$BILLING_ACCOUNT_ID")
+fi
+
 echo "==> Proyecto: $PROJECT | Zona: $ZONE"
 
 echo "==> 1/5 Habilitando APIs necesarias"
 gcloud services enable container.googleapis.com artifactregistry.googleapis.com \
   logging.googleapis.com --project "$PROJECT"
+# La API de presupuestos es opcional: si falla, el despliegue continúa igual
+if [ -n "$BILLING_ACCOUNT_ID" ]; then
+  gcloud services enable billingbudgets.googleapis.com --project "$PROJECT" \
+    || echo "    (aviso: no se pudo habilitar billingbudgets; se omitirá el presupuesto)"
+fi
 
 echo "==> 2/5 Creando Artifact Registry y cluster (terraform apply)"
 cd "$ROOT/deploy/gcp/terraform"
@@ -21,6 +34,7 @@ terraform init -input=false
 # Se crean primero registro y cluster; el chart necesita las imágenes publicadas
 terraform apply -input=false -auto-approve \
   -var "project_id=$PROJECT" -var "zone=$ZONE" -var "region=$REGION" \
+  "${TF_BUDGET_VAR[@]+"${TF_BUDGET_VAR[@]}"}" \
   -target=google_artifact_registry_repository.repo \
   -target=google_container_cluster.gke \
   -target=google_service_account.otel_collector \
@@ -36,7 +50,8 @@ done
 
 echo "==> 4/5 Desplegando la aplicación con Helm"
 terraform apply -input=false -auto-approve \
-  -var "project_id=$PROJECT" -var "zone=$ZONE" -var "region=$REGION"
+  -var "project_id=$PROJECT" -var "zone=$ZONE" -var "region=$REGION" \
+  "${TF_BUDGET_VAR[@]+"${TF_BUDGET_VAR[@]}"}"
 
 echo "==> 5/5 Verificando"
 gcloud container clusters get-credentials otel-lab --zone "$ZONE" --project "$PROJECT"
