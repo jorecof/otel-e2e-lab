@@ -98,12 +98,33 @@ def create_order(item_id: int, qty: int = 1):
         logger.warning("Cantidad inválida", extra={"item_id": item_id})
         raise HTTPException(status_code=400, detail="qty must be between 1 and 100")
 
-    # Llamada HTTP auto-instrumentada: el trace_id se propaga a service-b
-    resp = client.get(f"/items/{item_id}")
+    # Llamada HTTP auto-instrumentada: el trace_id se propaga a service-b.
+    #
+    # El manejo explícito de errores NO es cosmético: si se deja propagar la
+    # excepción, Starlette genera el 500 fuera del alcance del middleware de
+    # OpenTelemetry, y la métrica http.server.duration se registra SIN el
+    # atributo http_status_code. Resultado: durante una caída total de la
+    # dependencia el panel de tasa de errores marca 0 %, porque no existe
+    # ninguna serie 5xx que contar. Capturando la excepción aquí, FastAPI emite
+    # la respuesta dentro de la ruta instrumentada y la métrica sí lleva código.
+    try:
+        resp = client.get(f"/items/{item_id}")
+    except httpx.RequestError as exc:
+        logger.error(
+            "service-b inalcanzable: %s", exc, extra={"item_id": item_id}
+        )
+        raise HTTPException(
+            status_code=503, detail="inventory service unavailable"
+        ) from exc
+
     if resp.status_code == 404:
         logger.warning("Item inexistente en inventario", extra={"item_id": item_id})
         raise HTTPException(status_code=404, detail="item not found in inventory")
-    resp.raise_for_status()
+    if resp.status_code >= 500:
+        logger.error(
+            "service-b respondió %d", resp.status_code, extra={"item_id": item_id}
+        )
+        raise HTTPException(status_code=502, detail="inventory service error")
     item = resp.json()
 
     pricing = _calculate_total(item["price"], qty)

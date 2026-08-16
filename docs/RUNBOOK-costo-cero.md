@@ -160,6 +160,19 @@ tú mismo en las consolas:
 
 ## 6. Problemas frecuentes
 
+**"La tasa de errores marca 0 % durante una caída real"** — era un fallo de
+instrumentación, ya corregido. Si una excepción se propaga sin manejar, Starlette emite el
+500 *fuera* del alcance del middleware de OpenTelemetry y la métrica `http.server.duration`
+se registra sin el atributo `http_status_code`: no existe ninguna serie 5xx que contar y el
+panel muestra 0 % durante una interrupción total. La solución está en el código de ambos
+servicios — capturar la excepción y devolver un `HTTPException` explícito (503 si la
+dependencia no responde, 502 si responde con error), de modo que FastAPI genere la respuesta
+dentro de la ruta instrumentada. Para reproducir el escenario de incidente:
+```bash
+kubectl -n observability scale deploy/service-b --replicas=0   # provocar la caída
+kubectl -n observability scale deploy/service-b --replicas=1   # recuperar
+```
+
 **"Los pods de GKE quedan en Pending"** — Autopilot tarda 2-5 minutos en aprovisionar
 nodos la primera vez. Si pasan 10 minutos, revisa `kubectl -n observability describe pod`:
 suele ser que los requests no cumplen el mínimo de Autopilot (250m CPU / 512Mi).

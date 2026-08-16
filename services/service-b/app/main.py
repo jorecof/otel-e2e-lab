@@ -15,6 +15,7 @@ import time
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import Column, Integer, Numeric, String, create_engine, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, declarative_base
 
 DATABASE_URL = os.getenv(
@@ -114,8 +115,23 @@ def health():
 
 @app.get("/items/{item_id}", response_model=ItemOut)
 def get_item(item_id: int):
-    with Session(engine) as s:
-        item = s.get(Item, item_id)  # SELECT auto-instrumentado por SQLAlchemy
+    # Igual que en service-a: una excepción no manejada haría que Starlette
+    # genere el 500 fuera del alcance del middleware de OTel, y la métrica se
+    # registraría sin http_status_code. Capturándola, el 503 sí queda etiquetado
+    # y el panel de errores refleja la caída de la base de datos.
+    try:
+        session = Session(engine)
+    except OperationalError as exc:
+        logger.error("Base de datos inalcanzable: %s", exc)
+        raise HTTPException(status_code=503, detail="database unavailable") from exc
+
+    with session as s:
+        try:
+            item = s.get(Item, item_id)  # SELECT auto-instrumentado por SQLAlchemy
+        except OperationalError as exc:
+            logger.error("Fallo al consultar la base de datos: %s", exc,
+                         extra={"item_id": item_id})
+            raise HTTPException(status_code=503, detail="database unavailable") from exc
         if item is None:
             logger.warning("Item no encontrado", extra={"item_id": item_id})
             raise HTTPException(status_code=404, detail="item not found")
