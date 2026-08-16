@@ -74,12 +74,21 @@ y espera a que los pods estén listos. Al terminar imprime los comandos de acces
 
 **Capturas para el informe:**
 
+Abre los túneles en puertos locales distintos a los del stack local, para no
+confundir un entorno con el otro al capturar:
+
 ```bash
-kubectl -n observability port-forward svc/service-a 8000:8000 &
-kubectl -n observability port-forward svc/jaeger-ui 16686:16686 &
-kubectl -n observability port-forward svc/grafana 3000:3000 &
-kubectl -n observability port-forward svc/prometheus 9090:9090 &
-for i in $(seq 1 40); do curl -s "localhost:8000/api/orders/$((RANDOM%5+1))?qty=2" >/dev/null; done
+kubectl -n observability port-forward svc/service-a 8080:8000 &
+kubectl -n observability port-forward svc/jaeger-ui 16687:16686 &
+kubectl -n observability port-forward svc/grafana   3001:3000 &
+kubectl -n observability port-forward svc/prometheus 9091:9090 &
+```
+
+Genera tráfico sostenido con k6 mientras tomas las capturas (déjalo corriendo
+en su propia pestaña; 10 minutos por defecto):
+
+```bash
+k6 run benchmark/cloud-traffic.js
 ```
 
 1. **Jaeger en GKE** → `http://localhost:16686`, busca `service-a`, abre una traza
@@ -115,7 +124,7 @@ imprimiendo las IPs públicas.
 
 ```bash
 bash scripts/aws-endpoints.sh us-east-1     # vuelve a imprimir las IPs
-for i in $(seq 1 40); do curl -s "http://IP_SERVICE_A:8000/api/orders/$((RANDOM%5+1))?qty=2" >/dev/null; done
+TARGET_URL=http://IP_SERVICE_A:8000 k6 run benchmark/cloud-traffic.js
 ```
 
 1. **X-Ray** → consola → CloudWatch → X-Ray traces. Abre una traza y captura el mapa

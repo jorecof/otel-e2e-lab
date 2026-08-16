@@ -105,6 +105,15 @@ k6 run --summary-export results/k6_otel.json load-test.js
 Resultados medidos en `benchmark/results/` y análisis completo en
 `docs/reporte-tecnico.pdf`.
 
+Para generar tráfico sostenido mientras se capturan evidencias en la nube (carga
+moderada, con un 10 % de peticiones fallidas a propósito para poblar el panel de
+errores y dejar trazas de caso negativo):
+
+```bash
+k6 run benchmark/cloud-traffic.js                                  # GCP, vía port-forward
+TARGET_URL=http://IP_SERVICE_A:8000 k6 run benchmark/cloud-traffic.js   # AWS, IP pública
+```
+
 ## Los tres pilares — dónde mirar
 
 | Pilar    | Emisión (SDK)                                    | Transporte | Backend local | GCP | AWS |
