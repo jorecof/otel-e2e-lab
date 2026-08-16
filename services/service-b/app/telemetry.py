@@ -80,6 +80,10 @@ def setup_telemetry(app=None, engine=None):
             "service.name": SERVICE_NAME,
             "service.version": SERVICE_VERSION,
             "deployment.environment": ENVIRONMENT,
+            # Distingue cada worker de uvicorn: sin esto, los contadores
+            # acumulativos de varios workers se intercalan en el exporter
+            # Prometheus del Collector y distorsionan los rate().
+            "service.instance.id": f"{os.uname().nodename}-{os.getpid()}",
         }
     )
 

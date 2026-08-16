@@ -1,0 +1,38 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+     execution: local
+        script: load-test.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 75 max VUs, 5m30s max duration (incl. graceful stop):
+              * default: Up to 75 looping VUs for 5m0s over 3 stages (gracefulRampDown: 30s, gracefulStop: 30s)
+
+
+running (0m01.0s), 03/75 VUs, 5 complete and 0 interrupted iterations
+default   [   0% ] 03/75 VUs  0m01.0s/5m00.0s
+
+running (0m02.0s), 05/75 VUs, 20 complete and 0 interrupted iterations
+default   [   1% ] 05/75 VUs  0m02.0s/5m00.0s
+
+running (0m03.0s), 08/75 VUs, 42 complete and 0 interrupted iterations
+default   [   1% ] 08/75 VUs  0m03.0s/5m00.0s
+
+running (0m04.0s), 10/75 VUs, 76 complete and 0 interrupted iterations
+default   [   1% ] 10/75 VUs  0m04.0s/5m00.0s
+
+running (0m05.0s), 13/75 VUs, 118 complete and 0 interrupted iterations
+default   [   2% ] 13/75 VUs  0m05.0s/5m00.0s
+
+running (0m06.0s), 15/75 VUs, 166 complete and 0 interrupted iterations
+default   [   2% ] 15/75 VUs  0m06.0s/5m00.0s
+
+running (0m07.0s), 18/75 VUs, 225 complete and 0 interrupted iterations
+default   [   2% ] 18/75 VUs  0m07.0s/5m00.0s
+
+running (0m08.0s), 20/75 VUs, 300 complete and 0 interrupted iterations
+default   [   3% ] 20/75 VUs  0m08.0s/5m00.0s

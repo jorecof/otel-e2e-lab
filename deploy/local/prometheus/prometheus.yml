@@ -5,6 +5,7 @@ global:
 scrape_configs:
   # Métricas de las aplicaciones exportadas por el OTel Collector
   - job_name: otel-collector-apps
+    honor_labels: true   # conserva job=<service.name> emitido por el Collector
     static_configs:
       - targets: ["otel-collector:8889"]
 
