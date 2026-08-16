@@ -151,6 +151,22 @@ tú mismo en las consolas:
 nodos la primera vez. Si pasan 10 minutos, revisa `kubectl -n observability describe pod`:
 suele ser que los requests no cumplen el mínimo de Autopilot (250m CPU / 512Mi).
 
+**"Los pods de service-a/service-b quedan en ImagePullBackOff con 403 Forbidden"** —
+el cluster no tiene permiso para leer Artifact Registry. Los nodos de GKE usan la Service
+Account por defecto de Compute Engine, que en proyectos creados desde 2024 ya no recibe el
+rol Editor automáticamente. La IaC lo concede con `google_project_iam_member.gke_nodes_artifact_reader`;
+si necesitas aplicarlo a mano:
+```bash
+PROJNUM=$(gcloud projects describe TU_PROYECTO --format='value(projectNumber)')
+gcloud projects add-iam-policy-binding TU_PROYECTO \
+  --member="serviceAccount:${PROJNUM}-compute@developer.gserviceaccount.com" \
+  --role="roles/artifactregistry.reader" --condition=None
+```
+
+**"kubectl falla con gke-gcloud-auth-plugin not found"** — instálalo con
+`gcloud components install gke-gcloud-auth-plugin` y asegúrate de que el `bin` del SDK esté
+en el PATH: `export PATH="$(gcloud info --format='value(installation.sdk_root)')/bin:$PATH"`.
+
 **"La task de ECS se reinicia en bucle"** — mira los logs en CloudWatch, grupo
 `/otel-lab/ecs`. Las causas típicas son que la imagen no se publicó en ECR, o que
 `service-b` arrancó antes que Postgres (basta esperar, hay reintentos).

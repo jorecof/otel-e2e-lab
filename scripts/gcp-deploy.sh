@@ -46,7 +46,8 @@ terraform apply -input=false -auto-approve \
   -target=google_container_cluster.gke \
   -target=google_service_account.otel_collector \
   -target=google_project_iam_member.log_writer \
-  -target=google_service_account_iam_member.wi_binding
+  -target=google_service_account_iam_member.wi_binding \
+  -target=google_project_iam_member.gke_nodes_artifact_reader
 
 echo "==> 3/5 Construyendo y publicando imágenes"
 gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet

@@ -34,6 +34,21 @@ resource "google_artifact_registry_repository" "repo" {
   format        = "DOCKER"
 }
 
+data "google_project" "this" {
+  project_id = var.project_id
+}
+
+# Permiso de lectura del registro para los nodos de GKE.
+# Los nodos (también en Autopilot) corren con la Service Account por defecto de
+# Compute Engine. Desde 2024 esa cuenta ya NO recibe el rol Editor de forma
+# automática en proyectos nuevos, así que sin este binding los pods se quedan en
+# ImagePullBackOff con "403 Forbidden" aunque la imagen exista en el registro.
+resource "google_project_iam_member" "gke_nodes_artifact_reader" {
+  project = var.project_id
+  role    = "roles/artifactregistry.reader"
+  member  = "serviceAccount:${data.google_project.this.number}-compute@developer.gserviceaccount.com"
+}
+
 # ---------- Cluster GKE Autopilot ----------
 resource "google_container_cluster" "gke" {
   name     = "otel-lab"
