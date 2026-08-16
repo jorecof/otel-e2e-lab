@@ -63,6 +63,9 @@ terraform apply -input=false -auto-approve \
 
 echo "==> 5/5 Verificando"
 gcloud container clusters get-credentials otel-lab --region "$REGION" --project "$PROJECT"
+# El tag no cambia entre despliegues: sin este reinicio los pods se quedan
+# con la imagen anterior aunque el build y el push si se hayan ejecutado.
+kubectl -n observability rollout restart deploy/service-a deploy/service-b 2>/dev/null || true
 for d in service-a service-b prometheus grafana; do
   kubectl -n observability rollout status "deploy/$d" --timeout=300s
 done

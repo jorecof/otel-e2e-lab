@@ -14,6 +14,9 @@ spec:
       containers:
         - name: service-b
           image: "{{ .Values.image.registry }}/service-b:{{ .Values.image.tag }}"
+          # Sin esto Kubernetes reutiliza la imagen cacheada en el nodo
+          # y el pod sigue ejecutando el codigo anterior.
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports: [{ containerPort: 8001 }]
           env:
             - { name: OTEL_ENABLED, value: "true" }
@@ -53,6 +56,9 @@ spec:
       containers:
         - name: service-a
           image: "{{ .Values.image.registry }}/service-a:{{ .Values.image.tag }}"
+          # Sin esto Kubernetes reutiliza la imagen cacheada en el nodo
+          # y el pod sigue ejecutando el codigo anterior.
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports: [{ containerPort: 8000 }]
           env:
             - { name: OTEL_ENABLED, value: "true" }
